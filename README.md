@@ -37,15 +37,41 @@ re-entry — assume I remember nothing from the scrollback:
   or say explicitly that nothing is.
 ```
 
-## 2. Git worktrees for parallel agents
+## 2. Worktrees via treehouse (parallel agents)
+
+Assumes [treehouse](https://github.com/kunchenguid/treehouse) is installed.
 
 ```markdown
 ## Worktrees
 
-When starting any new feature or fix, begin by creating a separate git worktree from the base
-branch and do all work inside it, so parallel agents never overwrite each other's changes.
-After the work is merged, clean up by removing the worktree. For the next task, create a fresh
-worktree from the latest base branch — don't reuse old trees.
+Use [treehouse](https://github.com/kunchenguid/treehouse) to manage worktrees - never manual
+`git worktree add`. Treehouse keeps a pool of reusable worktrees, so dependencies and build
+cache survive between sessions and agents start warm instead of reinstalling.
+
+```bash
+treehouse get --lease --lease-holder <agent-name>   # acquire a worktree; prints its path
+treehouse return <path>                             # release it when done
+treehouse status                                    # inspect the pool
+```
+
+Rules:
+
+- Agent sessions acquire with `get --lease` and release with `treehouse return`. A leased
+  worktree is never handed out twice and is never pruned until returned - that is the
+  parallel-agent safety guarantee.
+- Treehouse hands out a detached HEAD at the latest default branch. Create a branch before
+  committing: `git switch -c <branch-slug>` inside the worktree.
+- Unlanded work is never discarded automatically. Commit and push a branch before returning
+  the tree. Only `destroy --include-unlanded --yes` removes dirty/unmerged content, and only
+  after the human confirms it is disposable.
+- If treehouse is not installed, install it first
+  (`curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh`) rather than falling
+  back to manual worktrees.
+
+After the work is merged, return the worktree to the pool with `treehouse return`. Pool
+cleanup is `treehouse prune` (dry run by default; `--yes` only after reviewing the list).
+Don't reuse old trees manually - a returned tree is reset to the latest default branch
+automatically.
 ```
 
 ## 3. TDD is mandatory
